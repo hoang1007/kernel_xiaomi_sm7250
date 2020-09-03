@@ -485,6 +485,7 @@ struct sde_connector {
 	spinlock_t event_lock;
 
 	struct backlight_device *bl_device;
+	struct sde_clone_cdev *cdev_clone;
 	struct delayed_work status_work;
 	u32 esd_status_interval;
 	bool panel_dead;
@@ -997,7 +998,7 @@ int sde_connector_esd_status(struct drm_connector *connector);
  */
 int sde_connector_hbm_ctl(struct drm_connector *connector, uint32_t op_code);
 
-int sde_connector_pre_hbm_ctl(struct drm_connector *connector, uint32_t op_code);
+int sde_connector_pre_hbm_ctl(struct drm_connector *connector);
 
 void sde_connector_mi_update_dimlayer_state(struct drm_connector *connector,
 	enum mi_dimlayer_type mi_dimlayer_type);

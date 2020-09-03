@@ -491,6 +491,12 @@ int msm_atomic_prepare_fb(struct drm_plane *plane,
 	return msm_framebuffer_prepare(new_state->fb, kms->aspace);
 }
 
+extern struct device *connector_kdev;
+void complete_time_generate_event(struct drm_device *dev)
+{
+	sysfs_notify(&connector_kdev->kobj, NULL, "complete_commit_time");
+}
+
 /* The (potentially) asynchronous part of the commit.  At this point
  * nothing can fail short of armageddon.
  */
@@ -532,6 +538,10 @@ static void complete_commit(struct msm_commit *c)
 	kms->funcs->complete_commit(kms, state);
 
 	drm_atomic_state_put(state);
+
+	priv->complete_commit_time = ktime_get()/1000;
+
+	complete_time_generate_event(dev);
 
 	commit_destroy(c);
 }

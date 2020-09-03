@@ -350,6 +350,7 @@ struct sde_crtc {
 	bool misr_enable_debugfs;
 	u32 misr_frame_count;
 	struct kthread_delayed_work idle_notify_work;
+	struct kthread_delayed_work idle_notify_work_cmd_mode;
 
 	struct sde_power_event *power_event;
 
@@ -455,6 +456,7 @@ struct sde_crtc_mi_state {
  * @new_perf: new performance state being requested
  * @mi_state: Mi part of crtc state
  * @secure_session: Indicates the type of secure session
+ * @mi_state: Mi part of crtc state
  */
 struct sde_crtc_state {
 	struct drm_crtc_state base;
@@ -920,11 +922,13 @@ int sde_crtc_mi_atomic_check(struct sde_crtc *sde_crtc, struct sde_crtc_state *c
 		void *pstates, int cnt);
 
 /**
- * sde_crtc_get_mi_fod_sync_info - to do crtc mi sync info
+ * sde_crtc_mi_atomic_check - to do crtc mi atomic check
+ * @crtc: Pointer to sde crtc state structure
  * @cstate: Pointer to sde crtc state structure
+ * @pstates: Pointer to sde plane state structure
+ * @cnt: plane refence count
  */
 uint32_t sde_crtc_get_mi_fod_sync_info(struct sde_crtc_state *cstate);
-
 
 /**
  * sde_crtc_get_num_datapath - get the number of datapath active

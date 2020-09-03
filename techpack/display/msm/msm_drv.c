@@ -71,6 +71,9 @@ atomic_t resume_pending;
 wait_queue_head_t resume_wait_q;
 static DEFINE_MUTEX(msm_release_lock);
 
+atomic_t resume_pending;
+wait_queue_head_t resume_wait_q;
+
 static void msm_fb_output_poll_changed(struct drm_device *dev)
 {
 	struct msm_drm_private *priv = NULL;
@@ -1892,7 +1895,6 @@ static struct drm_driver msm_driver = {
 };
 
 #ifdef CONFIG_PM_SLEEP
-
 static int msm_pm_prepare(struct device *dev)
 {
 	atomic_inc(&resume_pending);
@@ -2009,6 +2011,7 @@ static int compare_of(struct device *dev, void *data)
 {
 	return dev->of_node == data;
 }
+
 
 /*
  * Identify what components need to be added by parsing what remote-endpoints

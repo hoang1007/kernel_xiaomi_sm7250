@@ -43,11 +43,11 @@
 #include "sde_power_handle.h"
 #include "sde_core_perf.h"
 #include "sde_trace.h"
-#include "dsi_drm.h"
 #include "xiaomi_frame_stat.h"
 
 #define SDE_PSTATES_MAX (SDE_STAGE_MAX * 4)
 #define SDE_MULTIRECT_PLANE_MAX (SDE_STAGE_MAX * 2)
+#define IDLE_TIMEOUT_DEFAULT (1100)
 
 struct sde_crtc_custom_events {
 	u32 event;
@@ -55,9 +55,6 @@ struct sde_crtc_custom_events {
 			struct sde_irq_callback *irq);
 };
 
-struct drm_crtc *gcrtc;
-bool g_idleflag = true;
-bool idle_status;
 extern struct frame_stat fm_stat;
 
 static int sde_crtc_power_interrupt_handler(struct drm_crtc *crtc_drm,
@@ -66,8 +63,6 @@ static int sde_crtc_idle_interrupt_handler(struct drm_crtc *crtc_drm,
 	bool en, struct sde_irq_callback *idle_irq);
 static int sde_crtc_pm_event_handler(struct drm_crtc *crtc, bool en,
 		struct sde_irq_callback *noirq);
-static int sde_crtc_tp_event_handler(struct drm_crtc *crtc_drm,
-	bool en, struct sde_irq_callback *irq);
 
 static struct sde_crtc_custom_events custom_events[] = {
 	{DRM_EVENT_AD_BACKLIGHT, sde_cp_ad_interrupt},
@@ -78,7 +73,6 @@ static struct sde_crtc_custom_events custom_events[] = {
 	{DRM_EVENT_LTM_HIST, sde_cp_ltm_hist_interrupt},
 	{DRM_EVENT_LTM_WB_PB, sde_cp_ltm_wb_pb_interrupt},
 	{DRM_EVENT_LTM_OFF, sde_cp_ltm_off_event_handler},
-	{DRM_EVENT_TOUCH, sde_crtc_tp_event_handler},
 };
 
 /* default input fence timeout, in ms */
@@ -2462,10 +2456,6 @@ static void sde_crtc_frame_event_work(struct kthread_work *work)
 	}
 
 	if (fevent->event & SDE_ENCODER_FRAME_EVENT_SIGNAL_RETIRE_FENCE) {
-		if (sde_crtc->retire_frame_event_sf) {
-			sde_crtc->retire_frame_event_time = fevent->ts;
-			sysfs_notify_dirent(sde_crtc->retire_frame_event_sf);
-		}
 		/* this api should be called without spin_lock */
 		_sde_crtc_retire_event(fevent->connector, fevent->ts,
 				(fevent->event & SDE_ENCODER_FRAME_EVENT_ERROR)
@@ -3246,13 +3236,21 @@ static void sde_crtc_atomic_begin(struct drm_crtc *crtc,
 	_sde_crtc_blend_setup(crtc, old_state, true);
 	_sde_crtc_dest_scaler_setup(crtc);
 
+	if (g_panel->mi_cfg.smart_fps_support
+		&& sde_encoder_check_curr_mode(sde_crtc->mixers[0].encoder,
+					MSM_DISPLAY_CMD_MODE) &&
+		kthread_cancel_delayed_work_sync(&sde_crtc->idle_notify_work_cmd_mode)) {
+		pr_debug("idle notify work cancelled");
+	}
+
 	/* cancel the idle notify delayed work */
 	if (sde_encoder_check_curr_mode(sde_crtc->mixers[0].encoder,
 					MSM_DISPLAY_VIDEO_MODE) &&
 		kthread_cancel_delayed_work_sync(&sde_crtc->idle_notify_work)) {
-		idle_status = false;
 		SDE_DEBUG("idle notify work cancelled\n");
 	}
+
+	fm_stat.idle_status = false;
 
 	/*
 	 * Since CP properties use AXI buffer to program the
@@ -3296,7 +3294,7 @@ static void sde_crtc_atomic_flush(struct drm_crtc *crtc,
 	struct sde_crtc_state *cstate;
 	struct sde_kms *sde_kms;
 	int idle_time = 0;
-	static int idle_time_enable = false;
+	static bool idle_time_enable = false;
 	ktime_t get_input_fence_ts;
 	ktime_t now;
 	s64 duration;
@@ -3340,9 +3338,8 @@ static void sde_crtc_atomic_flush(struct drm_crtc *crtc,
 	if (!idle_time && idle_time_enable) {
 		idle_time = IDLE_TIMEOUT_DEFAULT;
 		idle_time_enable = false;
-	} else {
+	} else
 		idle_time_enable = true;
-	}
 
 	/*
 	 * If no mixers has been allocated in sde_crtc_atomic_check(),
@@ -3379,8 +3376,17 @@ static void sde_crtc_atomic_flush(struct drm_crtc *crtc,
 	duration = ktime_to_ns(ktime_sub(get_input_fence_ts, now));
 	frame_stat_collector(duration, GET_INPUT_FENCE_TS);
 
+	if(g_panel->mi_cfg.smart_fps_support
+		&& sde_encoder_check_curr_mode(sde_crtc->mixers[0].encoder,
+							MSM_DISPLAY_CMD_MODE)) {
+		kthread_queue_delayed_work(&event_thread->worker,
+					&sde_crtc->idle_notify_work_cmd_mode,
+					msecs_to_jiffies(IDLE_TIMEOUT_DEFAULT));
+		pr_debug("schedule idle notify work\n");
+	}
+
 	/* schedule the idle notify delayed work */
-	if (g_idleflag && idle_time && sde_encoder_check_curr_mode(
+	if (idle_time && sde_encoder_check_curr_mode(
 						sde_crtc->mixers[0].encoder,
 						MSM_DISPLAY_VIDEO_MODE)) {
 		kthread_queue_delayed_work(&event_thread->worker,
@@ -3408,8 +3414,6 @@ static void sde_crtc_atomic_flush(struct drm_crtc *crtc,
 			sde_plane_set_error(plane, true);
 		sde_plane_flush(plane);
 	}
-
-	gcrtc = crtc;
 
 	/* Kickoff will be scheduled by outer layer */
 	SDE_ATRACE_END("sde_crtc_atomic_flush");
@@ -4852,7 +4856,7 @@ static int _sde_crtc_atomic_check_pstates(struct drm_crtc *crtc,
 			plane, multirect_plane, &cnt);
 	if (rc)
 		return rc;
-
+#if 0
 	/*
 	 * mi layer check
 	 *   need execute only sde_enc->disp_info.is_primary is true
@@ -4860,7 +4864,7 @@ static int _sde_crtc_atomic_check_pstates(struct drm_crtc *crtc,
 	rc = sde_crtc_mi_atomic_check(sde_crtc, cstate, (void *)pstates, cnt);
 	if (rc)
 		return rc;
-
+#endif
 	/* assign mixer stages based on sorted zpos property */
 	rc = _sde_crtc_check_zpos(state, sde_crtc, pstates, cstate, mode, cnt);
 	if (rc)
@@ -5029,6 +5033,7 @@ void _sde_crtc_config_mi_dim_layer(struct sde_crtc *sde_crtc, struct sde_crtc_st
 	mixer = sde_crtc->mixers;
 	lm = mixer->hw_lm;
 
+	cstate->mi_state.mi_dim_layer = cstate->dim_layer;
 	if (lm && lm->ops.setup_dim_layer) {
 		if (cstate->num_dim_layers_bank <= SDE_MAX_DIM_LAYERS) {
 			cstate->dim_layer[cstate->num_dim_layers_bank].flags = SDE_DRM_DIM_LAYER_INCLUSIVE;
@@ -5056,7 +5061,8 @@ int sde_crtc_mi_atomic_check(struct sde_crtc *sde_crtc, struct sde_crtc_state *c
 	uint32_t mi_aodlayer_index = 0x0;
 	uint32_t mi_iconlayer_index = 0x0;
 	uint32_t mi_pressed_Iconlayer_index = 0x0;
-	bool mi_dimlayer_switch_enable = false;
+	bool mi_dimlayer_switch_enable = true;
+	int max_stage = 0;
 	struct plane_state *pstates_ = (struct plane_state *)pstates;
 
 	/* dimlayer switch for FOD and DC function */
@@ -5077,8 +5083,8 @@ int sde_crtc_mi_atomic_check(struct sde_crtc *sde_crtc, struct sde_crtc_state *c
 			mi_aodlayer_index = i;
 			break;
 
-			default:
-				break;
+		default:
+			break;
 		}
 	}
 
@@ -5089,24 +5095,27 @@ int sde_crtc_mi_atomic_check(struct sde_crtc *sde_crtc, struct sde_crtc_state *c
 			if (pstates_[i].stage >= dim_layer_stage) {
 				pstates_[i].stage++;
 				pstates_[i].sde_pstate->stage++;
+				if (pstates_[i].stage > max_stage)
+					max_stage = pstates_[i].stage;
 			}
 		}
 
 		/* do not use same stage */
 		for (i = 0; i < cstate->num_dim_layers; i++) {
-			if (cstate->dim_layer[i].stage >= dim_layer_stage)
+			if (cstate->dim_layer[i].stage >= dim_layer_stage &&
+				cstate->dim_layer[i].stage <= max_stage)
 				cstate->dim_layer[i].stage++;
 		}
-	} else if (mi_iconlayer_index > 0) {
+	} else if ((mi_iconlayer_index > 0)) {
 		for (i = 0; i < cnt; i++) {
 			if (pstates_[i].stage > dim_layer_stage)
-					dim_layer_stage = pstates_[i].stage;
+				dim_layer_stage = pstates_[i].stage;
 		}
 
 		/* do not use same stage */
 		for (i = 0; i < cstate->num_dim_layers; i++) {
 			if (cstate->dim_layer[i].stage > dim_layer_stage )
-				dim_layer_stage = cstate->dim_layer[i].stage;
+				cstate->dim_layer[i].stage = dim_layer_stage++;
 		}
 
 		dim_layer_stage++;
@@ -5117,7 +5126,7 @@ int sde_crtc_mi_atomic_check(struct sde_crtc *sde_crtc, struct sde_crtc_state *c
 		return 0;
 	 }
 
-	if (dim_layer_stage > 0x0) {
+	if (dim_layer_stage > 0x0 && cstate->mi_state.mi_dim_layer == NULL) {
 		SDE_ATRACE_BEGIN("dimlayer_show");
 		_sde_crtc_config_mi_dim_layer(sde_crtc, cstate, &cstate->base, dim_layer_stage);
 		SDE_ATRACE_END("dimlayer_show");
@@ -6468,46 +6477,24 @@ static void __sde_crtc_idle_notify_work(struct kthread_work *work)
 		event.length = sizeof(u32);
 		msm_mode_object_event_notify(&crtc->base, crtc->dev,
 				&event, (u8 *)&ret);
-		idle_status = true;
+		fm_stat.idle_status = true;
 		SDE_DEBUG("crtc[%d]: idle timeout notified\n", crtc->base.id);
 	}
 }
 
-void sde_crtc_touch_notify(void)
+static void __sde_crtc_idle_notify_work_cmd_mode(struct kthread_work *work)
 {
-	int ret = 0;
-	struct drm_event event;
-	struct dsi_bridge *c_bridge = NULL;
-	struct dsi_display *dsi_display = NULL;
-	struct drm_encoder *encoder = NULL;
+	struct sde_crtc *sde_crtc = container_of(work, struct sde_crtc,
+				idle_notify_work_cmd_mode.work);
 
-	if (gcrtc) {
-		list_for_each_entry(encoder, &gcrtc->dev->mode_config.encoder_list, head) {
-			if (encoder->crtc != gcrtc)
-				continue;
-
-			c_bridge = container_of(encoder->bridge, struct dsi_bridge, base);
-			if (c_bridge)
-				dsi_display = c_bridge->display;
-			break;
-		}
-
-		if (dsi_display && dsi_display->is_prim_display && dsi_display->panel
-			&& !dsi_display->panel->mi_cfg.panel_max_frame_rate) {
-			if (dsi_display->panel->dfps_caps.smart_fps_support && fm_stat.enabled) {
-				dsi_display->panel->mi_cfg.panel_max_frame_rate = true;
-				calc_fps(0, (int)true);
-			} else {
-				event.type = DRM_EVENT_TOUCH;
-				event.length = sizeof(u32);
-				msm_mode_object_event_notify(&gcrtc->base, gcrtc->dev,
-					&event, (u8 *)&ret);
-			}
-			gcrtc = NULL;
-		}
+	if (!sde_crtc) {
+		SDE_ERROR("invalid sde crtc\n");
+	} else {
+		fm_stat.idle_status = true;
+		calc_fps(0,0);
+		pr_debug("idle timeout notified cmd mode\n");
 	}
 }
-EXPORT_SYMBOL(sde_crtc_touch_notify);
 
 /* initialize crtc */
 struct drm_crtc *sde_crtc_init(struct drm_device *dev, struct drm_plane *plane)
@@ -6600,6 +6587,8 @@ struct drm_crtc *sde_crtc_init(struct drm_device *dev, struct drm_plane *plane)
 
 	kthread_init_delayed_work(&sde_crtc->idle_notify_work,
 					__sde_crtc_idle_notify_work);
+	kthread_init_delayed_work(&sde_crtc->idle_notify_work_cmd_mode,
+					__sde_crtc_idle_notify_work_cmd_mode);
 
 	SDE_DEBUG("crtc=%d new_llcc=%d, old_llcc=%d\n",
 		crtc->base.id,
@@ -6826,12 +6815,6 @@ static int sde_crtc_pm_event_handler(struct drm_crtc *crtc, bool en,
 }
 
 static int sde_crtc_idle_interrupt_handler(struct drm_crtc *crtc_drm,
-	bool en, struct sde_irq_callback *irq)
-{
-	return 0;
-}
-
-static int sde_crtc_tp_event_handler(struct drm_crtc *crtc_drm,
 	bool en, struct sde_irq_callback *irq)
 {
 	return 0;
