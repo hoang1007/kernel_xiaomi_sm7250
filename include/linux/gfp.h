@@ -500,15 +500,8 @@ static inline void arch_free_page(struct page *page, int order) { }
 static inline void arch_alloc_page(struct page *page, int order) { }
 #endif
 
-struct page *
-__alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order, int preferred_nid,
-							nodemask_t *nodemask);
-
-static inline struct page *
-__alloc_pages(gfp_t gfp_mask, unsigned int order, int preferred_nid)
-{
-	return __alloc_pages_nodemask(gfp_mask, order, preferred_nid, NULL);
-}
+struct page *__alloc_pages(gfp_t gfp, unsigned int order, int preferred_nid,
+		nodemask_t *nodemask);
 
 /*
  * Allocate pages, preferring the node given as nid. The node must be valid and
@@ -520,7 +513,7 @@ __alloc_pages_node(int nid, gfp_t gfp_mask, unsigned int order)
 	VM_BUG_ON(nid < 0 || nid >= MAX_NUMNODES);
 	VM_WARN_ON((gfp_mask & __GFP_THISNODE) && !node_online(nid));
 
-	return __alloc_pages(gfp_mask, order, nid);
+	return __alloc_pages(gfp_mask, order, nid, NULL);
 }
 
 /*

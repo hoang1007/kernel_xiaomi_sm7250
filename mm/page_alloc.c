@@ -4828,8 +4828,7 @@ static inline void finalise_ac(gfp_t gfp_mask, struct alloc_context *ac)
 /*
  * This is the 'heart' of the zoned buddy allocator.
  */
-struct page *
-__alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order, int preferred_nid,
+struct page *__alloc_pages(gfp_t gfp_mask, unsigned int order, int preferred_nid,
 							nodemask_t *nodemask)
 {
 	struct page *page;
@@ -4893,7 +4892,7 @@ out:
 
 	return page;
 }
-EXPORT_SYMBOL(__alloc_pages_nodemask);
+EXPORT_SYMBOL(__alloc_pages);
 
 /*
  * Common helper functions. Never use with __GFP_HIGHMEM because the returned
