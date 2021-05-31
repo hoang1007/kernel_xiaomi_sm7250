@@ -1072,7 +1072,7 @@ int mipi_dsi_dcs_set_display_brightness(struct mipi_dsi_device *dsi,
 EXPORT_SYMBOL(mipi_dsi_dcs_set_display_brightness);
 
 /**
- * mipi_dsi_dcs_set_display_brightness_big_endian() - sets the brightness value of the
+ * mipi_dsi_dcs_set_display_brightness_bigendian() - sets the brightness value of the
  * display with big endian, high byte to 1st parameter, low byte to 2nd parameter
  * @dsi: DSI peripheral device
  * @brightness: brightness value
