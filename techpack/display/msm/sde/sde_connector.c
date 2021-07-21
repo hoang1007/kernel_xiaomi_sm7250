@@ -1112,6 +1112,8 @@ int sde_connector_pre_kickoff(struct drm_connector *connector)
 	/* fingerprint hbm fence */
 	_sde_connector_mi_dimlayer_hbm_fence(connector);
 
+	sde_connector_update_fod_hbm(connector);
+
 	rc = c_conn->ops.pre_kickoff(connector, c_conn->display, &params);
 
 	if (c_conn->connector_type == DRM_MODE_CONNECTOR_DSI)
