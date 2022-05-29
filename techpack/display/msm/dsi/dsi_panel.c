@@ -4481,7 +4481,6 @@ exit_skip:
 	}
 
 	mi_cfg->in_aod = false;
-	mi_cfg->doze_brightness_state = DOZE_TO_NORMAL;
 	mi_cfg->into_aod_pending = false;
 	mi_cfg->layer_fod_unlock_success = false;
 	mi_cfg->sysfs_fod_unlock_success = false;
@@ -4905,7 +4904,6 @@ int dsi_panel_enable(struct dsi_panel *panel)
 	mi_cfg->fod_backlight_flag = false;
 	mi_cfg->in_aod = false;
 	mi_cfg->dimming_state = STATE_NONE;
-	mi_cfg->doze_brightness_state = DOZE_TO_NORMAL;
 	mi_cfg->into_aod_pending = false;
 	fm_stat.idle_status = false;
 
@@ -5094,10 +5092,6 @@ int dsi_panel_disable(struct dsi_panel *panel)
 					panel->name, rc);
 			rc = 0;
 		}
-	} else {
-		mi_cfg->unset_doze_brightness = mi_cfg->doze_brightness_state;
-		DSI_INFO("save doze brightness state [%d] when ESD recovery is underway\n",
-				mi_cfg->unset_doze_brightness);
 	}
 	panel->panel_initialized = false;
 	panel->power_mode = SDE_MODE_DPMS_OFF;
@@ -5114,7 +5108,6 @@ int dsi_panel_disable(struct dsi_panel *panel)
 	mi_cfg->fod_backlight_flag = false;
 	mi_cfg->in_aod = false;
 	mi_cfg->dimming_state = STATE_NONE;
-	mi_cfg->doze_brightness_state = DOZE_TO_NORMAL;
 	mi_cfg->into_aod_pending = false;
 	mi_cfg->layer_fod_unlock_success = false;
 	mi_cfg->sysfs_fod_unlock_success = false;
