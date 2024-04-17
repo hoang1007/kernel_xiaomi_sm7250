@@ -455,6 +455,8 @@ static struct bio *__bio_alloc(struct f2fs_io_info *fio, int npages)
 	} else {
 		bio->bi_end_io = f2fs_write_end_io;
 		bio->bi_private = sbi;
+		bio->bi_write_hint = f2fs_io_type_to_rw_hint(sbi,
+						fio->type, fio->temp);
 	}
 	iostat_alloc_and_bind_ctx(sbi, bio, NULL);
 
@@ -3837,10 +3839,12 @@ static void f2fs_dio_end_io(struct bio *bio)
 static void f2fs_dio_submit_bio(struct bio *bio, struct inode *inode,
 							loff_t file_offset)
 {
-	struct f2fs_private_dio *dio;
+	struct f2fs_sb_info *sbi = F2FS_I_SB(inode);
+	int seg_type = f2fs_rw_hint_to_seg_type(inode->i_write_hint);
+	enum temp_type temp = f2fs_get_segment_temp(seg_type);
 	bool write = (bio_op(bio) == REQ_OP_WRITE);
 
-	dio = f2fs_kzalloc(F2FS_I_SB(inode),
+	struct f2fs_private_dio *dio = f2fs_kzalloc(F2FS_I_SB(inode),
 			sizeof(struct f2fs_private_dio), GFP_NOFS);
 	if (!dio)
 		goto out;
@@ -3852,6 +3856,7 @@ static void f2fs_dio_submit_bio(struct bio *bio, struct inode *inode,
 
 	bio->bi_end_io = f2fs_dio_end_io;
 	bio->bi_private = dio;
+	bio->bi_write_hint = f2fs_io_type_to_rw_hint(sbi, DATA, temp);
 
 	inc_page_count(F2FS_I_SB(inode),
 			write ? F2FS_DIO_WRITE : F2FS_DIO_READ);
