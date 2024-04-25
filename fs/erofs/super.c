@@ -157,7 +157,6 @@ static int erofs_init_devices(struct super_block *sb,
 	struct erofs_buf buf = __EROFS_BUF_INITIALIZER;
 	struct erofs_device_info *dif;
 	struct erofs_deviceslot *dis;
-	void *ptr;
 	int id, err = 0;
 
 	sbi->total_blocks = sbi->primarydevice_blocks;
@@ -183,12 +182,9 @@ static int erofs_init_devices(struct super_block *sb,
 	idr_for_each_entry(&sbi->devs->tree, dif, id) {
 		struct block_device *bdev;
 
-		ptr = erofs_read_metabuf(&buf, sb, erofs_pos(sb, erofs_blknr(sb, pos)), EROFS_KMAP);
-		if (IS_ERR(ptr)) {
-			err = PTR_ERR(ptr);
-			break;
-		}
-		dis = ptr + erofs_blkoff(sb, pos);
+		dis = erofs_read_metabuf(&buf, sb, pos, EROFS_KMAP);
+		if (IS_ERR(dis))
+			return PTR_ERR(dis);
 
 		if (!sbi->devs->flatdev) {
 			bdev = blkdev_get_by_path(dif->path, FMODE_READ | FMODE_EXCL, sb->s_type);
