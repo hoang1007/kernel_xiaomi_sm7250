@@ -183,7 +183,7 @@ static int erofs_init_devices(struct super_block *sb,
 	idr_for_each_entry(&sbi->devs->tree, dif, id) {
 		struct block_device *bdev;
 
-		ptr = erofs_read_metabuf(&buf, sb, erofs_blknr(sb, pos), EROFS_KMAP);
+		ptr = erofs_read_metabuf(&buf, sb, erofs_pos(sb, erofs_blknr(sb, pos)), EROFS_KMAP);
 		if (IS_ERR(ptr)) {
 			err = PTR_ERR(ptr);
 			break;
