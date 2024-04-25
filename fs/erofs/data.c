@@ -34,13 +34,12 @@ void erofs_put_metabuf(struct erofs_buf *buf)
 void *erofs_bread(struct erofs_buf *buf, erofs_off_t offset,
 		  enum erofs_kmap_type type)
 {
-	struct inode *inode = buf->inode;
 	pgoff_t index = offset >> PAGE_SHIFT;
 	struct page *page = buf->page;
 
 	if (!page || page->index != index) {
 		erofs_put_metabuf(buf);
-		page = read_cache_page_gfp(inode->i_mapping, index, mapping_gfp_constraint(inode->i_mapping, ~__GFP_FS));
+		page = read_cache_page_gfp(buf->mapping, index, mapping_gfp_constraint(buf->mapping, ~__GFP_FS));
 		if (IS_ERR(page))
 			return page;
 		/* should already be PageUptodate, no need to lock page */
@@ -61,7 +60,7 @@ void *erofs_bread(struct erofs_buf *buf, erofs_off_t offset,
 
 void erofs_init_metabuf(struct erofs_buf *buf, struct super_block *sb)
 {
-	buf->inode = sb->s_bdev->bd_inode;
+	buf->mapping = sb->s_bdev->bd_inode->i_mapping;
 }
 
 void *erofs_read_metabuf(struct erofs_buf *buf, struct super_block *sb,
