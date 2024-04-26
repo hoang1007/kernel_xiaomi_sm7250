@@ -1838,7 +1838,7 @@ static int get_data_block_dio_write(struct inode *inode, sector_t iblock,
 {
 	return __get_data_block(inode, iblock, bh_result, create,
 				F2FS_GET_BLOCK_DIO, NULL,
-				f2fs_rw_hint_to_seg_type(inode->i_write_hint),
+				f2fs_rw_hint_to_seg_type(F2FS_I_SB(inode), inode->i_write_hint),
 				true);
 }
 
@@ -1847,7 +1847,7 @@ static int get_data_block_dio(struct inode *inode, sector_t iblock,
 {
 	return __get_data_block(inode, iblock, bh_result, create,
 				F2FS_GET_BLOCK_DIO, NULL,
-				f2fs_rw_hint_to_seg_type(inode->i_write_hint),
+				f2fs_rw_hint_to_seg_type(F2FS_I_SB(inode), inode->i_write_hint),
 				false);
 }
 
@@ -3840,7 +3840,7 @@ static void f2fs_dio_submit_bio(struct bio *bio, struct inode *inode,
 							loff_t file_offset)
 {
 	struct f2fs_sb_info *sbi = F2FS_I_SB(inode);
-	int seg_type = f2fs_rw_hint_to_seg_type(inode->i_write_hint);
+	int seg_type = f2fs_rw_hint_to_seg_type(sbi, inode->i_write_hint);
 	enum temp_type temp = f2fs_get_segment_temp(seg_type);
 	bool write = (bio_op(bio) == REQ_OP_WRITE);
 
