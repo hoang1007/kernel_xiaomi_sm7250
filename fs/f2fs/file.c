@@ -4618,6 +4618,10 @@ static ssize_t f2fs_file_read_iter(struct kiocb *iocb, struct iov_iter *iter)
 		f2fs_putname(p);
 	}
 skip_read_trace:
+	/* In LFS mode, if there is inflight dio, wait for its completion */
+	if (f2fs_lfs_mode(F2FS_I_SB(inode)))
+		inode_dio_wait(inode);
+
 	ret = generic_file_read_iter(iocb, iter);
 
 	if (ret > 0)
