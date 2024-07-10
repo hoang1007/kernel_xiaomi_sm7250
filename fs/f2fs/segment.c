@@ -2681,11 +2681,18 @@ static unsigned int __get_next_segno(struct f2fs_sb_info *sbi, int type)
 	unsigned short seg_type = curseg->seg_type;
 
 	sanity_check_seg_type(sbi, seg_type);
-	if (f2fs_need_rand_seg(sbi))
-		return prandom_u32() % (MAIN_SECS(sbi) * SEGS_PER_SEC(sbi));
+	if (__is_large_section(sbi)) {
+		if (f2fs_need_rand_seg(sbi)) {
+			unsigned int hint = GET_SEC_FROM_SEG(sbi, curseg->segno);
 
-	if (__is_large_section(sbi))
+			if (GET_SEC_FROM_SEG(sbi, curseg->segno + 1) != hint)
+				return curseg->segno;
+			return prandom_u32() % (GET_SEG_FROM_SEC(sbi, hint + 1) - (curseg->segno + 1)) + curseg->segno + 1;
+		}
 		return curseg->segno;
+	} else if (f2fs_need_rand_seg(sbi)) {
+		return prandom_u32() % (MAIN_SECS(sbi) * SEGS_PER_SEC(sbi));
+	}
 
 	/* inmem log may not locate on any segment after mount */
 	if (!curseg->inited)
