@@ -271,7 +271,8 @@ static int z_erofs_bvec_enqueue(struct z_erofs_bvec_iter *iter,
 		struct page *nextpage = *candidate_bvpage;
 
 		if (!nextpage) {
-			nextpage = erofs_allocpage(pagepool, GFP_KERNEL);
+			nextpage = __erofs_allocpage(pagepool, GFP_KERNEL,
+					true);
 			if (!nextpage)
 				return -ENOMEM;
 			set_page_private(nextpage, Z_EROFS_SHORTLIVED_PAGE);
@@ -1564,7 +1565,7 @@ repeat:
 	unlock_page(page);
 	put_page(page);
 out_allocpage:
-	page = erofs_allocpage(&f->pagepool, gfp);
+	page = __erofs_allocpage(&f->pagepool, gfp, true);
 	spin_lock(&pcl->obj.lockref.lock);
 	if (unlikely(pcl->compressed_bvecs[nr].page != zbv.page)) {
 		if (page)
@@ -1871,7 +1872,7 @@ static int z_erofs_readpage(struct file *file, struct page *page)
 
 	/* if some pclusters are ready, need submit them anyway */
 	err = z_erofs_runqueue(&f, 0) ?: err;
-	
+
 	if (err)
 		erofs_err(inode->i_sb, "failed to read, err [%d]", err);
 
