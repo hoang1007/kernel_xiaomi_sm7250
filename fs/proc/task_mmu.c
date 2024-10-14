@@ -947,8 +947,16 @@ static int smaps_hugetlb_range(pte_t *pte, unsigned long hmask,
 struct mm_walk_ops smaps_walk_ops = {
 	.pmd_entry = smaps_pte_range,
 #ifdef CONFIG_HUGETLB_PAGE
+	.hugetlb_entry  = smaps_hugetlb_range,
+#endif
+};
+
+struct mm_walk_ops smaps_shmem_walk_ops = {
+	.pmd_entry = smaps_pte_range,
+#ifdef CONFIG_HUGETLB_PAGE
 	.hugetlb_entry = smaps_hugetlb_range,
 #endif
+	.pte_hole = smaps_pte_hole,
 };
 
 static void smap_gather_stats(struct vm_area_struct *vma,
@@ -976,7 +984,8 @@ static void smap_gather_stats(struct vm_area_struct *vma,
 			mss->swap += shmem_swapped;
 		} else {
 			mss->check_shmem_swap = true;
-			smaps_walk_ops.pte_hole = smaps_pte_hole;
+			walk_page_vma(vma, &smaps_shmem_walk_ops, mss);
+			return;
 		}
 	}
 #endif
