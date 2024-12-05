@@ -106,7 +106,7 @@ __read_mostly unsigned int sched_ravg_hist_size = 5;
 static __read_mostly unsigned int sched_io_is_busy = 1;
 
 __read_mostly unsigned int sysctl_sched_window_stats_policy =
-	WINDOW_STATS_MAX_RECENT_AVG;
+	WINDOW_STATS_EWMA;
 
 unsigned int sysctl_sched_ravg_window_nr_ticks = (HZ / NR_WINDOWS_PER_SEC);
 
@@ -1806,7 +1806,7 @@ static void update_history(struct rq *rq, struct task_struct *p,
 	u32 *hist = &p->ravg.sum_history[0];
 	int ridx, widx;
 	u32 max = 0, avg, demand, pred_demand;
-	u64 sum = 0;
+	u64 sum = 0, ewma = 0, ewma_weight;
 	u16 demand_scaled, pred_demand_scaled;
 
 	/* Ignore windows where task had no activity */
@@ -1819,6 +1819,7 @@ static void update_history(struct rq *rq, struct task_struct *p,
 	for (; ridx >= 0; --widx, --ridx) {
 		hist[widx] = hist[ridx];
 		sum += hist[widx];
+		ewma_weight = sched_ravg_hist_size - widx - 1;
 		if (hist[widx] > max)
 			max = hist[widx];
 	}
@@ -1826,6 +1827,8 @@ static void update_history(struct rq *rq, struct task_struct *p,
 	for (widx = 0; widx < samples && widx < sched_ravg_hist_size; widx++) {
 		hist[widx] = runtime;
 		sum += hist[widx];
+		ewma += hist[widx] << ewma_weight;
+		ewma_weight = (ewma_weight + 1) % sched_ravg_hist_size;
 		if (hist[widx] > max)
 			max = hist[widx];
 	}
@@ -1836,6 +1839,27 @@ static void update_history(struct rq *rq, struct task_struct *p,
 		demand = runtime;
 	} else if (sysctl_sched_window_stats_policy == WINDOW_STATS_MAX) {
 		demand = max;
+	} else if (sysctl_sched_window_stats_policy == WINDOW_STATS_EWMA) {
+		/*
+		 * WMA stands for weighted moving average. It helps to
+		 * smooth load curve and react faster while ramping down
+		 * comparing with basic average policy. When ramping up
+		 * it prevents from a spurious big "recent" sample that
+		 * may lead to overshooting if it is bigger then AVG of
+		 * history demand.
+		 *
+		 * See below example (4 HS):
+		 *
+		 * WMA = (P0 * 4 + P1 * 3 + P2 * 2 + P3 * 1) / (4 + 3 + 2 + 1)
+		 *
+		 * This is done for power saving. Means when load disappears
+		 * or becomes low, this algorithm caches a real bottom load
+		 * faster (because of weights) then taking AVG values.
+		 *
+		 * EWMA is an exponential version of the WMA algorithm.
+		 */
+		ewma = div64_u64(ewma, (1 << sched_ravg_hist_size) - 1);
+		demand = (u32) ewma;
 	} else {
 		avg = div64_u64(sum, sched_ravg_hist_size);
 		if (sysctl_sched_window_stats_policy == WINDOW_STATS_AVG)
