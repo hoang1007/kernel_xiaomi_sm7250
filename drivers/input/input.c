@@ -349,10 +349,10 @@ static int input_get_disposition(struct input_dev *dev,
 	int disposition = INPUT_IGNORE_EVENT;
 	int value = *pval;
 
-	#ifdef CONFIG_KSU
+#ifdef CONFIG_KSU
 	if (unlikely(ksu_input_hook))
 		ksu_handle_input_handle_event(&type, &code, &value);
-   	#endif
+#endif
 
 	switch (type) {
 

@@ -29,6 +29,7 @@ TARGET_KERNEL_NAME=Driftwood-Kernel;
 
 DEFCONFIG_PATH=arch/arm64/configs
 DEFCONFIG_NAME=vendor/picasso_user_defconfig;
+DISABLE_KSU_FRAGMENT=vendor/disable_ksu.config;
 
 LOCAL_VERSION_NUMBER=$(cat $DEFCONFIG_PATH/$DEFCONFIG_NAME | grep CONFIG_LOCALVERSION= | cut -d = -f 2 | sed 's/"//g' | sed 's/-Driftwood-//g')
 TARGET_KERNEL_MOD_VERSION=$(make kernelversion)-$LOCAL_VERSION_NUMBER;
@@ -40,6 +41,8 @@ ANYKERNEL_URL=https://codeload.github.com/EndCredits/AnyKernel3/zip/refs/heads/p
 ANYKERNEL_PATH=AnyKernel3-picasso;
 ANYKERNEL_FILE=anykernel.zip;
 
+WITH_KERNELSU=1
+
 link_all_dtb_files(){
     find $OUT/arch/arm64/boot/dts/vendor/qcom -name '*.dtb' -exec cat {} + > $OUT/arch/arm64/boot/dtb;
 }
@@ -48,6 +51,10 @@ make_defconfig(){
     echo "------------------------------";
     echo " Building Kernel Defconfig..";
     echo "------------------------------";
+
+    if [ $WITH_KERNELSU == 0 ]; then
+        DEFCONFIG_NAME="$DEFCONFIG_NAME $DISABLE_KSU_FRAGMENT"
+    fi
 
     make CC=$CC ARCH=$ARCH CROSS_COMPILE=$CROSS_COMPILE CROSS_COMPILE_COMPAT=$CROSS_COMPILE_COMPAT CLANG_TRIPLE=$CLANG_TRIPLE LLVM=1 LLVM_IAS=1 $CC_ADDITION_FLAGS O=$OUT -j$THREAD $DEFCONFIG_NAME;
 }
@@ -117,12 +124,16 @@ clean(){
 }
 
 main(){
+    if [[ $2 == "noksu" ]]; then
+        echo "Building without Kernel SU"
+        WITH_KERNELSU=0
+    fi
     if [ $1 == "help" -o $1 == "-h" ]
     then
         echo "build.sh: A very simple Kernel build helper"
-        echo "usage: build.sh <build option>"
+        echo "usage: build.sh <operation> <optional argument>"
         echo
-        echo "Build options:"
+        echo "Build operations:"
         echo "    all             Perform a build without cleaning."
         echo "    cleanbuild      Clean the source tree and build files then perform a all build."
         echo
@@ -131,6 +142,9 @@ main(){
         echo "    defconfig       Only build kernel defconfig"
         echo "    help ( -h )     Print help information."
         echo "    version         Display the version number."
+        echo
+        echo "Optional argument"
+        echo "    noksu           Build without Kernel SU (with \"all\" and \"defconfig\" operation)"
         echo
     elif [ $1 == "savedefconfig" ]
     then
@@ -168,4 +182,4 @@ main(){
     fi
 }
 
-main "$1";
+main "$1" "$2";
