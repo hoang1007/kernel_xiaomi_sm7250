@@ -82,6 +82,7 @@ generate_flashable(){
         echo ' Getting AnyKernel ';
         curl $ANYKERNEL_URL -o $ANYKERNEL_FILE;
         unzip -o $ANYKERNEL_FILE;
+        sed -i $ANYKERNEL_PATH/anykernel.sh -e 's/supported.versions= 9 - 14/supported.versions= 9 - 15/g';
     else
         echo ' Anykernel 3 Detected. Skipping download '
     fi
