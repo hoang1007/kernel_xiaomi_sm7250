@@ -1040,10 +1040,14 @@ static int f2fs_rename(struct inode *old_dir, struct dentry *old_dentry,
 		iput(whiteout);
 	}
 
-	if (old_dir_entry)
-		f2fs_set_link(old_inode, old_dir_entry, old_dir_page, new_dir);
-	if (old_is_dir)
+	if (old_dir_entry) {
+		if (old_dir != new_dir)
+			f2fs_set_link(old_inode, old_dir_entry,
+						old_dir_page, new_dir);
+		else
+			f2fs_put_page(old_dir_page, 0);
 		f2fs_i_links_write(old_dir, false);
+	}
 
 	if (F2FS_OPTION(sbi).fsync_mode == FSYNC_MODE_STRICT) {
 		f2fs_add_ino_entry(sbi, new_dir->i_ino, TRANS_DIR_INO);
@@ -1289,9 +1293,18 @@ static const char *f2fs_encrypted_get_link(struct dentry *dentry,
 	return target;
 }
 
+static int f2fs_encrypted_symlink_getattr(const struct path *path,
+					  struct kstat *stat, u32 request_mask,
+					  unsigned int query_flags)
+{
+	f2fs_getattr(path, stat, request_mask, query_flags);
+
+	return fscrypt_symlink_getattr(path, stat);
+}
+
 const struct inode_operations f2fs_encrypted_symlink_inode_operations = {
-	.get_link	= f2fs_encrypted_get_link,
-	.getattr	= f2fs_getattr,
+	.get_link       = f2fs_encrypted_get_link,
+	.getattr	= f2fs_encrypted_symlink_getattr,
 	.setattr	= f2fs_setattr,
 	.listxattr	= f2fs_listxattr,
 };

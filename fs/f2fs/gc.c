@@ -1166,21 +1166,6 @@ static bool is_alive(struct f2fs_sb_info *sbi, struct f2fs_summary *sum,
 		return false;
 	}
 
-	if (IS_INODE(node_page)) {
-		base = offset_in_addr(F2FS_INODE(node_page));
-		max_addrs = DEF_ADDRS_PER_INODE;
-	} else {
-		base = 0;
-		max_addrs = DEF_ADDRS_PER_BLOCK;
-	}
-
-	if (base + ofs_in_node >= max_addrs) {
-		f2fs_err(sbi, "Inconsistent blkaddr offset: base:%u, ofs_in_node:%u, max:%u, ino:%u, nid:%u",
-			base, ofs_in_node, max_addrs, dni->ino, dni->nid);
-		f2fs_put_page(node_page, 1);
-		return false;
-	}
-
 	*nofs = ofs_of_node(node_page);
 	source_blkaddr = data_blkaddr(NULL, node_page, ofs_in_node);
 	f2fs_put_page(node_page, 1);
@@ -1392,11 +1377,9 @@ static int move_data_block(struct inode *inode, block_t bidx,
 		}
 	}
 
-	set_summary(&sum, dn.nid, dn.ofs_in_node, ni.version);
-
 	/* allocate block address */
 	err = f2fs_allocate_data_block(fio.sbi, NULL, fio.old_blkaddr, &newaddr,
-				&sum, type, NULL);
+				&sum, CURSEG_COLD_DATA, NULL);
 	if (err) {
 		f2fs_put_page(mpage, 1);
 		/* filesystem should shutdown, no need to recovery block */
@@ -1591,12 +1574,9 @@ next_step:
 			int err;
 
 			inode = f2fs_iget(sb, dni.ino);
-			if (IS_ERR(inode))
-				continue;
-
-			if (is_bad_inode(inode) ||
+			if (IS_ERR(inode) || is_bad_inode(inode) ||
 					special_file(inode->i_mode)) {
-				iput(inode);
+				set_sbi_flag(sbi, SBI_NEED_FSCK);
 				continue;
 			}
 

@@ -881,8 +881,6 @@ schedtune_boostgroup_init(struct schedtune *st, int idx)
 	/* Keep track of allocated boost groups */
 	allocated_group[idx] = st;
 	st->idx = idx;
-	
-	INIT_WORK(&st->dsb_work, dsb_worker);
 }
 
 #ifdef CONFIG_STUNE_ASSIST

@@ -872,6 +872,10 @@ int f2fs_truncate(struct inode *inode)
 	if (err)
 		return err;
 
+	err = dquot_initialize(inode);
+	if (err)
+		return err;
+
 	/* we should check inline_data size */
 	if (!f2fs_may_inline_data(inode)) {
 		err = f2fs_convert_inline_inode(inode);
@@ -3476,6 +3480,11 @@ static int f2fs_ioc_set_pin_file(struct file *filp, unsigned long arg)
 	/* Let's allow file pinning on zoned device. */
 	if (!f2fs_sb_has_blkzoned(sbi) &&
 	    f2fs_should_update_outplace(inode, NULL)) {
+		ret = -EINVAL;
+		goto out;
+	}
+
+	if (f2fs_should_update_outplace(inode, NULL)) {
 		ret = -EINVAL;
 		goto out;
 	}
