@@ -106,7 +106,7 @@ __read_mostly unsigned int sched_ravg_hist_size = 5;
 static __read_mostly unsigned int sched_io_is_busy = 1;
 
 __read_mostly unsigned int sysctl_sched_window_stats_policy =
-	WINDOW_STATS_EWMA;
+	WINDOW_STATS_MAX_RECENT_AVG;
 
 unsigned int sysctl_sched_ravg_window_nr_ticks = (HZ / NR_WINDOWS_PER_SEC);
 
