@@ -54,9 +54,7 @@
 		qcom,mdss-dsi-panel-peak-brightness = <4200000>;
 		qcom,mdss-dsi-panel-blackness-level = <3230>;
 		/* qcom,mdss-dsi-qsync-min-refresh-rate = <60>; */
-
 		qcom,mdss-dsi-pan-enable-dynamic-fps;
-		qcom,mdss-dsi-pan-enable-smart-fps;
 		qcom,mdss-dsi-pan-fps-update =
 			"dfps_immediate_porch_mode_vfp";
 		qcom,dsi-supported-dfps-list = <120 90 60 50 30>;
@@ -265,7 +263,8 @@
 				15 01 00 00 00 00 02 FF 10
 				15 01 00 00 00 00 02 55 00
 			];
-			mi,mdss-dsi-cabc-dimmming-command = [
+			mi,mdss-dsi-dimmingon-command = [
+				/* CABC DIMMING ON */
 				15 01 00 00 00 00 02 FF 10
 				15 01 00 00 00 00 02 53 2C
 			];
@@ -274,7 +273,7 @@
 			mi,mdss-dsi-cabcstillon-command-state = "dsi_hs_mode";
 			mi,mdss-dsi-cabcmovieon-command-state = "dsi_hs_mode";
 			mi,mdss-dsi-cabcoff-command-state = "dsi_hs_mode";
-			mi,mdss-dsi-cabc-dimmming-command-state = "dsi_hs_mode";
+			mi,mdss-dsi-dimmingon-command-state = "dsi_hs_mode";
 
 			mi,mdss-dsi-xy-coordinate-command = [
 				15 01 00 00 00 00 02 FF 10
